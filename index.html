@@ -11,6 +11,50 @@
 <link rel="manifest" href="data:application/json,{}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Pacifico&family=Nunito:wght@300;400;500;600;700;800&family=Caveat:wght@400;600;700&display=swap" rel="stylesheet">
+
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+  import { getFirestore, collection, doc, setDoc, getDoc, getDocs, query, where, orderBy, updateDoc, deleteDoc, serverTimestamp, writeBatch, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+  import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+
+ const firebaseConfig = {
+  apiKey: "AIzaSyAsjFTgImhwB2bbGQl-UNPFsVTUtrKeJ5I",
+  authDomain: "secret-crush-whisper.firebaseapp.com",
+  projectId: "secret-crush-whisper",
+  storageBucket: "secret-crush-whisper.firebasestorage.app",
+  messagingSenderId: "610990256450",
+  appId: "1:610990256450:web:c21b3ec4975db939e258db"
+};
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const auth = getAuth(app);
+
+  // Делаем всё доступным глобально
+  window.db = db;
+  window.auth = auth;
+  window.collection = collection;
+  window.doc = doc;
+  window.setDoc = setDoc;
+  window.getDoc = getDoc;
+  window.getDocs = getDocs;
+  window.query = query;
+  window.where = where;
+  window.orderBy = orderBy;
+  window.updateDoc = updateDoc;
+  window.deleteDoc = deleteDoc;
+  window.serverTimestamp = serverTimestamp;
+  window.writeBatch = writeBatch;
+  window.onSnapshot = onSnapshot;
+  window.createUserWithEmailAndPassword = createUserWithEmailAndPassword;
+  window.signInWithEmailAndPassword = signInWithEmailAndPassword;
+  window.signOut = signOut;
+  window.onAuthStateChanged = onAuthStateChanged;
+  
+  console.log('Firebase initialized');
+</script>
+
 <style>
 /* ===== CSS VARIABLES ===== */
 :root {
@@ -739,7 +783,9 @@ body {
 .cal-day {
   aspect-ratio: 1;
   border-radius: 10px;
-  display: flex; align-items: center; justify-content: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 0.8rem;
   font-weight: 700;
   background: rgba(255,183,197,0.1);
@@ -1304,10 +1350,74 @@ body {
   box-shadow: 0 3px 12px rgba(45,27,78,0.4);
 }
 .night-mode .night-indicator { display: flex; }
+/* Fix for auth screens visibility */
+#auth-screens {
+  display: block;
+  min-height: 100vh;
+}
+
+#auth-screens.active {
+  display: block;
+}
+
+#auth-screens:not(.active) {
+  display: none;
+}
+
+#app {
+  display: none;
+  min-height: 100vh;
+}
+
+#app.active {
+  display: block;
+}
+
+/* Fix for empty state */
+.envelopes {
+  min-height: 200px;
+}
+
+.loading-spinner {
+  text-align: center;
+  padding: 40px;
+  font-size: 1.2rem;
+  color: var(--text-light);
+}
+/* Fix for visibility */
+#mystic-view, #shadow-view {
+  display: none;
+  min-height: 60vh;
+}
+
+#mystic-view .page-section, 
+#shadow-view .page-section {
+  display: none;
+}
+
+#mystic-view .page-section.active, 
+#shadow-view .page-section.active {
+  display: block;
+}
+
+/* Make sure content is visible */
+.envelopes, #wishes-list, #sent-list {
+  min-height: 100px;
+}
+
+/* Loading indicator */
+.loading-indicator {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-light);
+  font-size: 1.1rem;
+}
 </style>
 </head>
 <body>
-
+<div id="debug-panel" style="position: fixed; bottom: 10px; left: 10px; background: rgba(0,0,0,0.8); color: lime; font-size: 10px; padding: 8px; border-radius: 8px; z-index: 9999; max-width: 90%; font-family: monospace; display: none;">
+  <div id="debug-info">Загрузка...</div>
+</div>
 <!-- Stars for night mode -->
 <div class="stars" id="stars"></div>
 
@@ -1329,48 +1439,97 @@ body {
     <div class="splash-title">Secret Crush Whisper</div>
     <div class="splash-sub">Только наше место ✨</div>
 
-    <!-- REGISTER CARD -->
     <div class="card" id="register-card">
-      <h2>✨ Создать наш мир</h2>
-      <div class="input-group">
-        <label>Твоё магическое имя (Он — получатель)</label>
-        <input type="text" id="reg-myname" placeholder="Алекс" maxlength="20">
-      </div>
-      <div class="input-group">
-        <label>Имя тайной отправительницы</label>
-        <input type="text" id="reg-sendername" placeholder="Её нежный псевдоним" maxlength="20">
-      </div>
-      <div class="input-group">
-        <label>🔐 Общий пароль (мин 8 символов)</label>
-        <input type="password" id="reg-pass" placeholder="••••••••">
-      </div>
-      <div class="input-group">
-        <label>Подтвердить пароль</label>
-        <input type="password" id="reg-pass2" placeholder="••••••••">
-      </div>
-      <button class="btn btn-primary" onclick="doRegister()">💫 Создать наш мир</button>
-      <button class="link-btn" onclick="showLogin()">Уже есть аккаунт → Войти</button>
+  <h2>✨ Создать наш мир (2 аккаунта)</h2>
+  
+  <div style="background: rgba(255,143,171,0.1); border-radius: 16px; padding: 16px; margin-bottom: 20px;">
+    <p style="font-size: 0.85rem; color: var(--text-light); margin-bottom: 12px; text-align: center;">💑 Создаются два аккаунта сразу: для Него и для Неё</p>
+  </div>
+  
+  <!-- === АККАУНТ ПОЛУЧАТЕЛЯ (ОН) === -->
+  <div style="border-left: 3px solid var(--pink); padding-left: 16px; margin-bottom: 24px;">
+    <h3 style="font-family: 'Caveat', cursive; font-size: 1.3rem; color: var(--pink); margin-bottom: 12px;">💙 Аккаунт ПОЛУЧАТЕЛЯ (Он)</h3>
+    
+    <div class="input-group">
+      <label>📛 Его магическое имя</label>
+      <input type="text" id="reg-myname" placeholder="Алекс" maxlength="20">
     </div>
+    
+    <div class="input-group">
+      <label>📧 Его Email</label>
+      <input type="email" id="reg-receiver-email" placeholder="alex@example.com">
+    </div>
+    
+    <div class="input-group">
+      <label>🔐 Его пароль (мин 8 символов)</label>
+      <input type="password" id="reg-receiver-pass" placeholder="••••••••">
+    </div>
+  </div>
+  
+  <!-- === АККАУНТ ОТПРАВИТЕЛЬНИЦЫ (ОНА) === -->
+  <div style="border-left: 3px solid var(--lavender-deep); padding-left: 16px; margin-bottom: 24px;">
+    <h3 style="font-family: 'Caveat', cursive; font-size: 1.3rem; color: var(--lavender-deep); margin-bottom: 12px;">🌸 Аккаунт ОТПРАВИТЕЛЬНИЦЫ (Она)</h3>
+    
+    <div class="input-group">
+      <label>📛 Её нежный псевдоним</label>
+      <input type="text" id="reg-sendername" placeholder="Анна" maxlength="20">
+    </div>
+    
+    <div class="input-group">
+      <label>📧 Её Email</label>
+      <input type="email" id="reg-sender-email" placeholder="anna@example.com">
+    </div>
+    
+    <div class="input-group">
+      <label>🔐 Её пароль (мин 8 символов)</label>
+      <input type="password" id="reg-sender-pass" placeholder="••••••••">
+    </div>
+  </div>
+  
+  <div class="input-group">
+    <label>🔐 Общий пароль для пары (мин 8 символов)</label>
+    <input type="password" id="reg-pass" placeholder="••••••••">
+  </div>
+  
+  <div class="input-group">
+    <label>Подтвердить общий пароль</label>
+    <input type="password" id="reg-pass2" placeholder="••••••••">
+  </div>
+  
+  <button class="btn btn-primary" onclick="doRegisterBoth()">💫 Создать наш мир (2 аккаунта)</button>
+  <button class="link-btn" onclick="showLogin()">Уже есть аккаунты → Войти</button>
+</div>
 
     <!-- LOGIN CARD -->
     <div class="card" id="login-card" style="display:none">
-      <h2>💌 Войти в наш мир</h2>
-      <div class="toggle-row">
-        <button class="toggle-btn active" id="toggle-receiver" onclick="switchLoginMode('receiver')">💙 Я — получатель (Он)</button>
-        <button class="toggle-btn" id="toggle-sender" onclick="switchLoginMode('sender')">🌸 Я — отправительница (Она)</button>
-      </div>
-      <div class="input-group">
-        <label>🔐 Наш пароль</label>
-        <input type="password" id="login-pass" placeholder="••••••••">
-      </div>
-      <label style="display:flex;align-items:center;gap:8px;margin-bottom:16px;cursor:pointer;font-size:0.9rem;font-weight:600;color:var(--text-light)">
-        <input type="checkbox" id="remember-me" style="width:18px;height:18px;accent-color:var(--pink)">
-        Запомнить на 30 дней
-      </label>
-      <button class="btn btn-primary" onclick="doLogin()">💌 Войти</button>
-      <button class="link-btn" onclick="showRegister()">← Назад к регистрации</button>
-    </div>
+  <h2>💌 Войти в наш мир</h2>
+  
+  <div style="background: rgba(255,143,171,0.1); border-radius: 12px; padding: 10px; margin-bottom: 16px; text-align: center;">
+    <p style="font-size: 0.8rem; color: var(--text-light);">👤 <strong>Он</strong> входит со своим email<br>👩 <strong>Она</strong> входит со своим email</p>
   </div>
+  
+  <div class="toggle-row">
+    <button class="toggle-btn active" id="toggle-receiver" onclick="switchLoginMode('receiver')">💙 Я — получатель (Он)</button>
+    <button class="toggle-btn" id="toggle-sender" onclick="switchLoginMode('sender')">🌸 Я — отправительница (Она)</button>
+  </div>
+  
+  <div class="input-group">
+    <label>📧 Email</label>
+    <input type="email" id="login-email" placeholder="your@email.com">
+  </div>
+  
+  <div class="input-group">
+    <label>🔐 Пароль</label>
+    <input type="password" id="login-pass" placeholder="••••••••">
+  </div>
+  
+  <label style="display:flex;align-items:center;gap:8px;margin-bottom:16px;cursor:pointer;font-size:0.9rem;font-weight:600;color:var(--text-light)">
+    <input type="checkbox" id="remember-me" style="width:18px;height:18px;accent-color:var(--pink)">
+    Запомнить на 30 дней
+  </label>
+  
+  <button class="btn btn-primary" onclick="doLogin()">💌 Войти</button>
+  <button class="link-btn" onclick="showRegister()">← Назад к регистрации</button>
 </div>
 
 <!-- ==================== MAIN APP ==================== -->
@@ -1719,6 +1878,11 @@ let state = {
   codeVerified: false,
 };
 
+window.currentUserId = null;
+window.currentUserRole = null;
+window.pairId = null;
+window.userDataCache = null;
+
 const STICKERS = ['🌹','💖','🌟','🦋','🌙','✨','🍀','🐱','🎀','🌸','💫','🎁','🔥','🌈','💎','🫂','😘','🌺','🍓','🎶'];
 const LEVELS = [
   { name:'Нежный шёпот', icon:'🌸', min:0 },
@@ -1730,20 +1894,91 @@ const LEVELS = [
 ];
 const AVATARS = ['🌸','🦋','🐱','🐰','🌙','🦄','🌺','💖'];
 
-/* ===== STORAGE HELPERS ===== */
-function getData(key, def) {
-  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : def; } catch { return def; }
-}
-function setData(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
+/* ===== FIREBASE DATA HELPERS ===== */
 
-function getMessages() { return getData('scw_messages', []); }
-function saveMessages(msgs) { setData('scw_messages', msgs); }
-function getWishes() { return getData('scw_wishes', []); }
-function saveWishes(w) { setData('scw_wishes', w); }
-function getStickers() { return getData('scw_stickers', []); }
-function saveStickers(s) { setData('scw_stickers', s); }
-function getSafeMessages() { return getData('scw_safe', []); }
-function saveSafeMessages(s) { setData('scw_safe', s); }
+async function getMessages() {
+  if (!window.pairId) {
+    console.warn('getMessages: no pairId');
+    return [];
+  }
+  
+  try {
+    const q = window.query(
+      window.collection(window.db, 'messages'),
+      window.where('pairId', '==', window.pairId),
+      window.orderBy('ts', 'desc')
+    );
+    const snap = await window.getDocs(q);
+    const messages = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    console.log(`getMessages: loaded ${messages.length} messages`);
+    return messages;
+  } catch(e) { 
+    console.error('getMessages error:', e); 
+    return []; 
+  }
+}
+
+async function saveMessages(msgs) {
+  if (!window.pairId) return;
+  try {
+    const batch = writeBatch(window.db);
+    for (const msg of msgs) {
+      const msgRef = doc(window.db, 'messages', msg.id.toString());
+      batch.set(msgRef, { ...msg, pairId: window.pairId }, { merge: true });
+    }
+    await batch.commit();
+  } catch(e) { console.warn(e); }
+}
+
+async function getWishes() {
+  if (!window.pairId) return [];
+  try {
+    const q = query(
+      collection(window.db, 'wishes'),
+      where('pairId', '==', window.pairId),
+      orderBy('ts', 'desc')
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch(e) { return []; }
+}
+
+async function saveWishes(wishes) {
+  if (!window.pairId) return;
+  try {
+    const batch = writeBatch(window.db);
+    for (const wish of wishes) {
+      const wishRef = doc(window.db, 'wishes', wish.id?.toString() || Date.now().toString());
+      batch.set(wishRef, { ...wish, pairId: window.pairId }, { merge: true });
+    }
+    await batch.commit();
+  } catch(e) { console.warn(e); }
+}
+
+async function getStickers() {
+  if (!window.pairId) return [];
+  try {
+    const q = query(
+      collection(window.db, 'stickers'),
+      where('pairId', '==', window.pairId),
+      orderBy('ts', 'asc')
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(d => d.data());
+  } catch(e) { return []; }
+}
+
+async function saveStickers(stickers) {
+  if (!window.pairId) return;
+  try {
+    const batch = writeBatch(window.db);
+    for (const sticker of stickers) {
+      const stickerRef = doc(window.db, 'stickers', Date.now().toString() + Math.random());
+      batch.set(stickerRef, { ...sticker, pairId: window.pairId });
+    }
+    await batch.commit();
+  } catch(e) { console.warn(e); }
+}
 
 /* ===== AUTH ===== */
 function showLogin() {
@@ -1761,67 +1996,512 @@ function switchLoginMode(mode) {
   document.getElementById('toggle-sender').classList.toggle('active', mode === 'sender');
 }
 
-function doRegister() {
-  const myname = document.getElementById('reg-myname').value.trim() || '';
-  const sendername = document.getElementById('reg-sendername').value.trim() || '';
-  const pass = document.getElementById('reg-pass').value;
-  const pass2 = document.getElementById('reg-pass2').value;
-  if (pass.length < 8) { toast('Пароль минимум 8 символов 🙈'); return; }
-  if (pass !== pass2) { toast('Пароли не совпадают 😅'); return; }
-  const config = { myname, sendername, pass: btoa(pass), avatar: '🌸', mood: '😍', secretCode: '', timerStart: Date.now(), safePass: '' };
-  setData('scw_config', config);
-  toast('Наш мир создан! ✨ Войди теперь');
-  showLogin();
+async function doRegisterBoth() {
+  // Данные получателя (ОН)
+  const receiverName = document.getElementById('reg-myname').value.trim();
+  const receiverEmail = document.getElementById('reg-receiver-email').value.trim();
+  const receiverPass = document.getElementById('reg-receiver-pass').value;
+  
+  // Данные отправительницы (ОНА)
+  const senderName = document.getElementById('reg-sendername').value.trim();
+  const senderEmail = document.getElementById('reg-sender-email').value.trim();
+  const senderPass = document.getElementById('reg-sender-pass').value;
+  
+  // Общий пароль пары
+  const pairPass = document.getElementById('reg-pass').value;
+  const pairPass2 = document.getElementById('reg-pass2').value;
+  
+  // Валидация
+  if (!receiverName || !senderName) { toast('Введите имена для обоих'); return; }
+  if (!receiverEmail || !senderEmail) { toast('Введите email для обоих'); return; }
+  if (!receiverPass || !senderPass) { toast('Введите пароли для обоих аккаунтов'); return; }
+  if (receiverPass.length < 8) { toast('Пароль получателя минимум 8 символов'); return; }
+  if (senderPass.length < 8) { toast('Пароль отправительницы минимум 8 символов'); return; }
+  if (pairPass.length < 8) { toast('Общий пароль пары минимум 8 символов'); return; }
+  if (pairPass !== pairPass2) { toast('Общие пароли не совпадают'); return; }
+  
+  // Показываем индикатор загрузки
+  const registerBtn = document.querySelector('#register-card .btn-primary');
+  const originalText = registerBtn.textContent;
+  registerBtn.textContent = '⏳ Создаём два аккаунта...';
+  registerBtn.disabled = true;
+  
+  let receiverUid = null;
+  let senderUid = null;
+  
+  try {
+    // ===== 1. РЕГИСТРИРУЕМ ПОЛУЧАТЕЛЯ (ОН) =====
+    toast('📝 Создаём аккаунт получателя...');
+    const receiverCred = await window.createUserWithEmailAndPassword(window.auth, receiverEmail, receiverPass);
+    receiverUid = receiverCred.user.uid;
+    
+    // ===== 2. РЕГИСТРИРУЕМ ОТПРАВИТЕЛЬНИЦУ (ОНА) =====
+    toast('📝 Создаём аккаунт отправительницы...');
+    const senderCred = await window.createUserWithEmailAndPassword(window.auth, senderEmail, senderPass);
+    senderUid = senderCred.user.uid;
+    
+    // ===== 3. СОЗДАЁМ PAIR ID (уникальный идентификатор пары) =====
+    const pairId = `pair_${receiverUid}_${senderUid}`;
+    
+    // ===== 4. СОЗДАЁМ ДОКУМЕНТ ПОЛУЧАТЕЛЯ =====
+    await window.setDoc(window.doc(window.db, 'users', receiverUid), {
+      name: receiverName,
+      senderName: senderName,
+      email: receiverEmail,
+      role: 'receiver',
+      partnerId: senderUid,
+      partnerEmail: senderEmail,
+      avatar: '🦁',
+      mood: '😍',
+      secretCode: '',
+      safePass: '',
+      timerStart: Date.now(),
+      createdAt: new Date().toISOString(),
+      lastActive: new Date().toISOString()
+    });
+    
+    // ===== 5. СОЗДАЁМ ДОКУМЕНТ ОТПРАВИТЕЛЬНИЦЫ =====
+    await window.setDoc(window.doc(window.db, 'users', senderUid), {
+      name: receiverName,
+      senderName: senderName,
+      email: senderEmail,
+      role: 'sender',
+      partnerId: receiverUid,
+      partnerEmail: receiverEmail,
+      avatar: '🌸',
+      mood: '🥰',
+      secretCode: '',
+      safePass: '',
+      timerStart: Date.now(),
+      createdAt: new Date().toISOString(),
+      lastActive: new Date().toISOString()
+    });
+    
+    // ===== 6. СОЗДАЁМ ДОКУМЕНТ ОТНОШЕНИЙ (ПАРЫ) =====
+    await window.setDoc(window.doc(window.db, 'relationships', pairId), {
+      receiverId: receiverUid,
+      senderId: senderUid,
+      receiverEmail: receiverEmail,
+      senderEmail: senderEmail,
+      commonPass: btoa(pairPass),
+      createdAt: new Date().toISOString()
+    });
+    
+    // ===== 7. СОЗДАЁМ ПРИВЕТСТВЕННОЕ СООБЩЕНИЕ =====
+    const welcomeMessage = {
+      id: Date.now(),
+      text: `✨ Привет! Это первый секрет. Добро пожаловать в наш тайный мир! 💕`,
+      mood: '💕',
+      invisible: false,
+      isSafe: false,
+      alias: senderName,
+      scheduled: null,
+      ts: Date.now(),
+      read: false,
+      liked: false,
+      rewarded: false,
+      reply: null,
+      isSticker: false,
+      fromRole: 'sender',
+      pairId: pairId
+    };
+    
+    await window.setDoc(window.doc(window.db, 'messages', welcomeMessage.id.toString()), welcomeMessage);
+    
+    // ===== 8. ВЫХОДИМ ИЗ АККАУНТОВ =====
+    await window.signOut(window.auth);
+    
+    toast('✅ Два аккаунта созданы! Теперь войдите каждый под своим аккаунтом.');
+    
+    // Очищаем форму
+    document.getElementById('reg-myname').value = '';
+    document.getElementById('reg-receiver-email').value = '';
+    document.getElementById('reg-receiver-pass').value = '';
+    document.getElementById('reg-sendername').value = '';
+    document.getElementById('reg-sender-email').value = '';
+    document.getElementById('reg-sender-pass').value = '';
+    document.getElementById('reg-pass').value = '';
+    document.getElementById('reg-pass2').value = '';
+    
+    // Показываем форму входа
+    showLogin();
+    
+    // Показываем подсказку
+    setTimeout(() => {
+      toast('💡 Теперь войдите: ОН → используйте свой email, ОНА → свой email');
+    }, 2000);
+    
+  } catch (err) {
+    console.error('Registration error:', err);
+    
+    // Откат: если один пользователь создался, а второй нет - удаляем первого
+    if (receiverUid && !senderUid) {
+      try {
+        const user = await window.auth.signInWithEmailAndPassword(window.auth, receiverEmail, receiverPass);
+        await user.user.delete();
+      } catch(e) { console.warn('Cleanup error:', e); }
+    }
+    
+    let errorMsg = err.message;
+    if (err.code === 'auth/email-already-in-use') {
+      errorMsg = 'Один из email уже зарегистрирован. Используйте другие email.';
+    } else if (err.code === 'auth/invalid-email') {
+      errorMsg = 'Неверный формат email';
+    } else if (err.code === 'auth/weak-password') {
+      errorMsg = 'Слишком слабый пароль (мин. 6 символов)';
+    } else if (err.code === 'permission-denied') {
+      errorMsg = 'Ошибка доступа к базе данных. Проверьте правила Firestore.';
+    }
+    toast('Ошибка: ' + errorMsg);
+  } finally {
+    registerBtn.textContent = originalText;
+    registerBtn.disabled = false;
+  }
 }
 
-function doLogin() {
-  const config = getData('scw_config', null);
-  if (!config) { toast('Сначала зарегистрируйтесь! 💫'); showRegister(); return; }
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
   const pass = document.getElementById('login-pass').value;
-  if (btoa(pass) !== config.pass) { toast('Неверный пароль 😢'); return; }
-  const role = state.loginMode === 'receiver' ? 'mystic' : 'shadow';
-  if (document.getElementById('remember-me').checked) { setData('scw_session', { role, expires: Date.now() + 30*24*60*60*1000 }); }
-  loginAs(role);
+
+  if (!email) { toast('Введите email'); return; }
+  if (!pass) { toast('Введите пароль'); return; }
+
+  // Показываем индикатор загрузки
+  const loginBtn = document.querySelector('#login-card .btn-primary');
+  const originalText = loginBtn.textContent;
+  loginBtn.textContent = '⏳ Вход...';
+  loginBtn.disabled = true;
+
+  try {
+    // Вход через Firebase Auth
+    const userCred = await window.signInWithEmailAndPassword(window.auth, email, pass);
+    const uid = userCred.user.uid;
+    
+    // Получаем данные пользователя из Firestore
+    const userDoc = await window.getDoc(window.doc(window.db, 'users', uid));
+    
+    if (!userDoc.exists()) { 
+      toast('Пользователь не найден в базе данных'); 
+      loginBtn.textContent = originalText;
+      loginBtn.disabled = false;
+      return; 
+    }
+    
+    const userData = userDoc.data();
+    const role = userData.role;
+    const targetRole = state.loginMode === 'receiver' ? 'receiver' : 'sender';
+    
+    // Проверяем соответствие роли
+    if ((targetRole === 'receiver' && role !== 'receiver') || 
+        (targetRole === 'sender' && role !== 'sender')) {
+      toast(`Вы выбрали роль "${targetRole === 'receiver' ? 'Получатель (Он)' : 'Отправительница (Она)'}", но ваш аккаунт имеет роль "${role === 'receiver' ? 'Получатель (Он)' : 'Отправительница (Она)'}". Переключите режим входа.`); 
+      loginBtn.textContent = originalText;
+      loginBtn.disabled = false;
+      return;
+    }
+    
+    // Сохраняем глобальные переменные
+    window.currentUserId = uid;
+    window.currentUserRole = role;
+    window.userDataCache = userData;
+    
+    // Формируем pairId
+    if (userData.partnerId) {
+      window.pairId = `pair_${uid}_${userData.partnerId}`;
+    } else if (userData.partnerEmail) {
+      // Ищем партнёра по email
+      const usersRef = window.collection(window.db, 'users');
+      const q = window.query(usersRef, window.where('email', '==', userData.partnerEmail));
+      const querySnap = await window.getDocs(q);
+      if (!querySnap.empty) {
+        const partnerDoc = querySnap.docs[0];
+        const partnerId = partnerDoc.id;
+        window.pairId = `pair_${uid}_${partnerId}`;
+        // Обновляем partnerId в текущем пользователе
+        await window.updateDoc(window.doc(window.db, 'users', uid), { partnerId: partnerId });
+        userData.partnerId = partnerId;
+      } else {
+        window.pairId = `pair_${uid}_pending`;
+      }
+    } else {
+      window.pairId = `pair_${uid}_pending`;
+    }
+    
+    // Обновляем время последнего входа
+    await window.updateDoc(window.doc(window.db, 'users', uid), {
+      lastActive: new Date().toISOString()
+    });
+    
+    // Сохраняем сессию, если выбрано "запомнить"
+    if (document.getElementById('remember-me').checked) {
+      localStorage.setItem('scw_session', JSON.stringify({ 
+        uid: uid, 
+        role: role,
+        expires: Date.now() + 30*24*60*60*1000 
+      }));
+    }
+    
+    toast(`Добро пожаловать, ${role === 'receiver' ? userData.name : userData.senderName}! ✨`);
+    loginAs(role);
+    
+  } catch (err) {
+    console.error('Login error:', err);
+    let errorMsg = err.message;
+    if (err.code === 'auth/user-not-found') {
+      errorMsg = 'Пользователь не найден. Зарегистрируйтесь сначала.';
+    } else if (err.code === 'auth/wrong-password') {
+      errorMsg = 'Неверный пароль';
+    } else if (err.code === 'auth/invalid-email') {
+      errorMsg = 'Неверный формат email';
+    } else if (err.code === 'auth/too-many-requests') {
+      errorMsg = 'Слишком много попыток. Попробуйте позже.';
+    }
+    toast('Ошибка входа: ' + errorMsg);
+  } finally {
+    loginBtn.textContent = originalText;
+    loginBtn.disabled = false;
+  }
 }
 
-function checkSavedSession() {
-  const sess = getData('scw_session', null);
-  if (sess && sess.expires > Date.now()) { loginAs(sess.role); return true; }
+async function checkSavedSession() {
+  const sessData = localStorage.getItem('scw_session');
+  if (!sessData) return false;
+  
+  try {
+    const sess = JSON.parse(sessData);
+    if (sess.expires > Date.now()) {
+      // Проверяем, что пользователь всё ещё существует в Firebase Auth
+      const currentUser = window.auth.currentUser;
+      if (currentUser && currentUser.uid === sess.uid) {
+        const userDoc = await window.getDoc(window.doc(window.db, 'users', sess.uid));
+        if (userDoc.exists()) {
+          window.currentUserId = sess.uid;
+          window.currentUserRole = sess.role;
+          window.userDataCache = userDoc.data();
+          const userData = userDoc.data();
+          if (userData.partnerId) {
+            window.pairId = `pair_${sess.uid}_${userData.partnerId}`;
+          }
+          loginAs(sess.role);
+          return true;
+        }
+      }
+    }
+  } catch(e) { 
+    console.warn('Session check error:', e); 
+  }
   return false;
 }
 
-function loginAs(role) {
+async function loginAs(role) {
+  console.log('=== LOGIN AS START ===');
+  console.log('Role:', role);
+  console.log('window.currentUserId:', window.currentUserId);
+  console.log('window.userDataCache:', window.userDataCache);
+  
+  // Показываем отладочную панель
+  const debugPanel = document.getElementById('debug-panel');
+  if (debugPanel) debugPanel.style.display = 'block';
+  document.getElementById('debug-info').innerHTML = 'Вход в систему...';
+  
   state.user = role;
-  document.getElementById('auth-screens').classList.remove('active');
-  document.getElementById('app').classList.add('active');
-  document.getElementById('mystic-view').style.display = role === 'mystic' ? 'block' : 'none';
-  document.getElementById('shadow-view').style.display = role === 'shadow' ? 'block' : 'none';
+  
+  // Скрываем экран авторизации
+  const authScreens = document.getElementById('auth-screens');
+  authScreens.classList.remove('active');
+  authScreens.style.display = 'none';
+  
+  // Показываем главное приложение
+  const app = document.getElementById('app');
+  app.classList.add('active');
+  app.style.display = 'block';
+  
+  document.getElementById('debug-info').innerHTML = 'Приложение показано, загрузка данных...';
+  
+  // Показываем нужную вьюшку
+  const mysticView = document.getElementById('mystic-view');
+  const shadowView = document.getElementById('shadow-view');
+  
+  if (role === 'mystic') {
+    mysticView.style.display = 'block';
+    shadowView.style.display = 'none';
+    document.getElementById('debug-info').innerHTML = 'Режим: Получатель (Он)';
+  } else {
+    mysticView.style.display = 'none';
+    shadowView.style.display = 'block';
+    document.getElementById('debug-info').innerHTML = 'Режим: Отправительница (Она)';
+  }
+  
+  // Строим навигацию
   buildBottomNav(role);
-  renderAll();
+  
+  document.getElementById('debug-info').innerHTML += '<br>Загрузка сообщений...';
+  
+  // Загружаем все данные с проверкой
+  try {
+    await renderAll();
+    document.getElementById('debug-info').innerHTML += '<br>✅ Данные загружены';
+  } catch (err) {
+    console.error('Render error:', err);
+    document.getElementById('debug-info').innerHTML += '<br>❌ Ошибка: ' + err.message;
+  }
+  
+  // Для отправительницы проверяем код
   state.codeVerified = false;
-  if (role === 'shadow') checkSecretCode();
-  updateTopBar();
+  if (role === 'shadow') {
+    document.getElementById('debug-info').innerHTML += '<br>Проверка секретного кода...';
+    checkSecretCode();
+  }
+  
+  // Обновляем верхнюю панель
+  await updateTopBar();
+  
+  // Запускаем ночной режим
   startNightCheck();
+  
+  // Запускаем таймер неактивности
   startInactivityTimer();
+  
+  // Запускаем прослушивание изменений в реальном времени
+  startRealtimeListener();
+  
+  // Скрываем отладочную панель через 5 секунд
+  setTimeout(() => {
+    if (debugPanel) debugPanel.style.display = 'none';
+  }, 5000);
+  
+  console.log('=== LOGIN AS END ===');
+  
+  // Принудительно показываем активную вкладку
+  if (role === 'mystic') {
+    const activeTab = document.querySelector('#mystic-view .tab-btn.active');
+    if (!activeTab) {
+      const firstTab = document.querySelector('#mystic-view .tab-btn');
+      if (firstTab) firstTab.click();
+    }
+  } else {
+    const activeTab = document.querySelector('#shadow-view .tab-btn.active');
+    if (!activeTab) {
+      const firstTab = document.querySelector('#shadow-view .tab-btn');
+      if (firstTab) firstTab.click();
+    }
+  }
+  // Принудительно показываем активную вкладку
+  setTimeout(() => {
+    forceShowActiveTab();
+    // Дополнительная проверка через 1 секунду
+    setTimeout(() => {
+      if (state.user === 'mystic') {
+        const inboxSection = document.getElementById('tab-inbox');
+        if (inboxSection && !inboxSection.classList.contains('active')) {
+          console.log('Forcing inbox tab');
+          switchTab('inbox', document.querySelector('#mystic-view .tab-btn'));
+        }
+      } else {
+        const sendSection = document.getElementById('stab-send');
+        if (sendSection && !sendSection.classList.contains('active')) {
+          console.log('Forcing send tab');
+          switchTabS('send', document.querySelector('#shadow-view .tab-btn'));
+        }
+      }
+    }, 1000);
+  }, 500);
+}
+function forceShowActiveTab() {
+  console.log('forceShowActiveTab called');
+  
+  if (state.user === 'mystic') {
+    const activeTab = document.querySelector('#mystic-view .tab-btn.active');
+    if (activeTab) {
+      const tabName = activeTab.textContent.includes('Её тайны') ? 'inbox' :
+                      activeTab.textContent.includes('Желания') ? 'wishes' :
+                      activeTab.textContent.includes('Статистика') ? 'stats' :
+                      activeTab.textContent.includes('Стикеры') ? 'stickers' : 'mystic-profile';
+      switchTab(tabName, activeTab);
+    } else {
+      // Если нет активной вкладки, показываем первую
+      const firstTab = document.querySelector('#mystic-view .tab-btn');
+      if (firstTab) firstTab.click();
+    }
+  } else {
+    const activeTab = document.querySelector('#shadow-view .tab-btn.active');
+    if (activeTab) {
+      const tabName = activeTab.textContent.includes('Отправить') ? 'send' :
+                      activeTab.textContent.includes('История') ? 'history' :
+                      activeTab.textContent.includes('Его уголок') ? 'her-corner' : 'shadow-level';
+      switchTabS(tabName, activeTab);
+    } else {
+      const firstTab = document.querySelector('#shadow-view .tab-btn');
+      if (firstTab) firstTab.click();
+    }
+  }
+}
+function startRealtimeListener() {
+  if (!window.pairId || !window.db) return;
+  
+  console.log('Starting realtime listener for pair:', window.pairId);
+  
+  // Слушаем изменения сообщений
+  const messagesQuery = window.query(
+    window.collection(window.db, 'messages'),
+    window.where('pairId', '==', window.pairId),
+    window.orderBy('ts', 'desc')
+  );
+  
+  const unsubscribe = window.onSnapshot(messagesQuery, (snapshot) => {
+    console.log('Messages updated, count:', snapshot.docs.length);
+    if (state.user === 'mystic') {
+      renderEnvelopes();
+    }
+    if (state.user === 'shadow') {
+      renderSentList();
+    }
+    updateTopBar();
+  }, (error) => {
+    console.warn('Realtime error:', error);
+  });
+  
+  // Сохраняем функцию отписки, если нужно
+  window.unsubscribeMessages = unsubscribe;
+}
+function startRealtimeListener() {
+  if (!window.pairId) return;
+  const q = query(collection(window.db, 'messages'), where('pairId', '==', window.pairId), orderBy('ts', 'desc'));
+  onSnapshot(q, () => {
+    if (state.user === 'mystic') renderEnvelopes();
+    if (state.user === 'shadow') renderSentList();
+    updateTopBar();
+  });
 }
 
-function doLogout() {
+let realtimeUnsub = null;
+function onSnapshot(q, callback) {
+  if (realtimeUnsub) realtimeUnsub();
+  realtimeUnsub = window.firestore.onSnapshot ? null : null;
+}
+
+async function doLogout() {
   localStorage.removeItem('scw_session');
+  await window.auth.signOut();
   state.user = null;
+  window.currentUserId = null;
+  window.pairId = null;
   document.getElementById('app').classList.remove('active');
   document.getElementById('auth-screens').classList.add('active');
   document.getElementById('login-pass').value = '';
+  document.getElementById('login-email').value = '';
 }
 
 function openProfile() { if(state.user==='mystic') { switchTab('mystic-profile', null); document.querySelectorAll('#mystic-view .tab-btn').forEach((b,i)=>{ if(i===4) b.classList.add('active'); else b.classList.remove('active'); }); } }
 
-function updateTopBar() {
-  const config = getData('scw_config', {});
-  const msgs = getMessages().filter(m => !m.scheduled || m.scheduled <= Date.now());
-  const unread = msgs.filter(m => !m.read && !m.isSafe).length;
-  const name = state.user === 'mystic' ? (config.myname||'') : (config.sendername||'');
+async function updateTopBar() {
+  if (!window.currentUserId) return;
+  const config = window.userDataCache || {};
+  const msgs = await getMessages();
+  const unread = msgs.filter(m => !m.read && !m.isSafe && m.fromRole === 'shadow').length;
+  const name = state.user === 'mystic' ? (config.name || '') : (config.senderName || '');
   document.getElementById('top-greeting').textContent = `Привет, ${name} ✨`;
-  document.getElementById('top-sub').textContent = state.user==='mystic' ? `Ждёт тайн: ${unread}` : `Отправлено: ${msgs.length}`;
+  document.getElementById('top-sub').textContent = state.user==='mystic' ? `Ждёт тайн: ${unread}` : `Отправлено: ${msgs.filter(m => m.fromRole === 'shadow').length}`;
   document.getElementById('top-avatar').textContent = config.avatar || '🌸';
   const badge = document.getElementById('notif-badge');
   badge.style.display = unread > 0 ? 'flex' : 'none';
@@ -1873,53 +2553,105 @@ function switchTabS(tab, btn) {
   if (tab==='shadow-level') renderLevel();
 }
 
-function renderAll() {
-  renderEnvelopes();
-  renderWishes();
-  renderStats();
-  renderTimer();
-  renderProfile();
-  renderSecretCode();
-  renderStickersMystic();
-  renderStickersShadow();
-  updateTopBar();
-  renderLevel();
+async function renderAll() {
+  console.log('=== RENDER ALL START ===');
+  
+  try {
+    // Проверяем наличие данных
+    if (!window.currentUserId) {
+      console.warn('No current user ID');
+      return;
+    }
+    
+    if (!window.pairId) {
+      console.warn('No pair ID, attempting to fetch...');
+      // Пытаемся получить partnerId из данных пользователя
+      if (window.userDataCache && window.userDataCache.partnerId) {
+        window.pairId = `pair_${window.currentUserId}_${window.userDataCache.partnerId}`;
+        console.log('Pair ID created:', window.pairId);
+      }
+    }
+    
+    // Загружаем сообщения
+    console.log('Loading messages...');
+    await renderEnvelopes();
+    
+    // Загружаем желания
+    console.log('Loading wishes...');
+    await renderWishes();
+    
+    // Загружаем статистику
+    console.log('Loading stats...');
+    await renderStats();
+    
+    // Загружаем таймер
+    renderTimer();
+    
+    // Загружаем профиль
+    renderProfile();
+    
+    // Загружаем секретный код
+    renderSecretCode();
+    
+    // Загружаем стикеры
+    await renderStickersMystic();
+    await renderStickersShadow();
+    
+    // Обновляем верхнюю панель
+    await updateTopBar();
+    
+    // Загружаем уровень
+    await renderLevel();
+    
+    // Если это отправительница, загружаем её уголок
+    if (state.user === 'shadow') {
+      await renderHerCorner();
+      await renderSentList();
+    }
+    
+    console.log('=== RENDER ALL COMPLETE ===');
+  } catch (err) {
+    console.error('RenderAll error:', err);
+    toast('Ошибка загрузки данных: ' + err.message);
+  }
 }
 
-function setMood(btn, emoji) {
+async function setMood(btn, emoji) {
   document.querySelectorAll('.mood-emoji-btn').forEach(b=>b.classList.remove('selected'));
   btn.classList.add('selected');
-  const config = getData('scw_config', {});
-  config.mood = emoji;
-  setData('scw_config', config);
+  if (window.currentUserId) {
+    await updateDoc(doc(window.db, 'users', window.currentUserId), { mood: emoji });
+    if (window.userDataCache) window.userDataCache.mood = emoji;
+  }
   toast(`Настроение: ${emoji} сохранено! 🌈`);
   spawnHeart(btn);
 }
 
-function setSecretCode() {
+async function setSecretCode() {
   const val = document.getElementById('set-code-input').value.trim();
   if (!val) { toast('Введи код! 🔮'); return; }
-  const config = getData('scw_config', {});
-  config.secretCode = val;
-  setData('scw_config', config);
+  if (window.currentUserId) {
+    await updateDoc(doc(window.db, 'users', window.currentUserId), { secretCode: val });
+    if (window.userDataCache) window.userDataCache.secretCode = val;
+  }
   renderSecretCode();
   toast(`Код ${val} задан! 🔐`);
 }
 
 function renderSecretCode() {
-  const config = getData('scw_config', {});
+  const config = window.userDataCache || {};
   document.getElementById('my-code-display').textContent = config.secretCode || '—';
 }
 
 function checkSecretCode() {
-  const config = getData('scw_config', {});
+  const config = window.userDataCache || {};
   if (!config.secretCode) { state.codeVerified = true; document.getElementById('code-check-section').style.display='none'; document.getElementById('send-form-section').style.display='block'; return; }
   document.getElementById('code-check-section').style.display='block';
   document.getElementById('send-form-section').style.display='none';
 }
 
 function checkCode() {
-  const config = getData('scw_config', {});
+  const config = window.userDataCache || {};
   const guess = document.getElementById('code-guess-input').value.trim();
   if (guess === config.secretCode) {
     state.codeVerified = true;
@@ -1966,11 +2698,11 @@ function updateCharCount() {
   document.getElementById('char-count').textContent = len;
 }
 
-function sendMessage() {
+async function sendMessage() {
   const text = document.getElementById('msg-text').value.trim();
   if (!text) { toast('Напиши что-нибудь! 💕'); return; }
-  const config = getData('scw_config', {});
-  const alias = document.getElementById('sender-alias').value.trim() || config.sendername || '';
+  const config = window.userDataCache || {};
+  const alias = document.getElementById('sender-alias').value.trim() || config.senderName || '';
   let scheduledTime = null;
   if (schedOn) { const v = document.getElementById('scheduled-time').value; scheduledTime = v ? new Date(v).getTime() : null; }
 
@@ -1988,14 +2720,17 @@ function sendMessage() {
     rewarded: false,
     reply: null,
     isSticker: false,
+    fromRole: 'shadow',
+    pairId: window.pairId
   };
-  const msgs = getMessages();
-  msgs.unshift(msg);
-  saveMessages(msgs);
-  if (!scheduledTime) {
-    config.timerStart = Date.now();
-    setData('scw_config', config);
+  
+  const msgRef = doc(window.db, 'messages', msg.id.toString());
+  await setDoc(msgRef, msg);
+  
+  if (!scheduledTime && window.currentUserId) {
+    await updateDoc(doc(window.db, 'users', window.currentUserId), { timerStart: Date.now() });
   }
+  
   sendBubble(document.querySelector('.btn-send'));
   document.getElementById('msg-text').value = '';
   document.getElementById('sender-alias').value = '';
@@ -2028,19 +2763,48 @@ function sendBubble(btn) {
   setTimeout(()=>bubble.remove(), 1600);
 }
 
-function renderEnvelopes() {
-  const msgs = getMessages().filter(m => (!m.scheduled || m.scheduled <= Date.now()) && !m.isSafe);
+async function renderEnvelopes() {
+  console.log('renderEnvelopes called');
+  
   const list = document.getElementById('envelopes-list');
+  if (!list) {
+    console.error('envelopes-list element not found');
+    return;
+  }
+  
+  const msgs = await getMessages();
+  console.log('Total messages:', msgs.length);
+  
+  // Для получателя показываем только сообщения от отправительницы
+  const filtered = msgs.filter(m => 
+    (!m.scheduled || m.scheduled <= Date.now()) && 
+    !m.isSafe && 
+    m.fromRole === 'shadow'
+  );
+  
+  console.log('Filtered messages for display:', filtered.length);
+  
   const empty = document.getElementById('empty-envelopes');
-  if (msgs.length === 0) { list.innerHTML = ''; list.appendChild(empty); return; }
+  
+  if (filtered.length === 0) { 
+    list.innerHTML = ''; 
+    if (empty) list.appendChild(empty);
+    console.log('No messages to display');
+    return; 
+  }
+  
   list.innerHTML = '';
-  msgs.forEach((msg, i) => {
+  
+  for (let i = 0; i < filtered.length; i++) {
+    const msg = filtered[i];
     const el = document.createElement('div');
     el.className = 'envelope';
     el.style.animationDelay = (i*0.08)+'s';
+    
     const mood = msg.mood ? `<span class="msg-mood-badge">${msg.mood}</span>` : '';
     const preview = msg.invisible ? '👁️‍🗨️ Чернила-невидимки...' : msg.text.slice(0,50) + (msg.text.length>50?'...':'');
     const opened = msg.read;
+    
     el.innerHTML = `
       <div class="envelope-top" onclick="openEnvelope(${msg.id})">
         <div class="envelope-icon ${opened?'opened':'unopened'}">${opened?'💌':'💝'}</div>
@@ -2064,19 +2828,22 @@ function renderEnvelopes() {
       </div>
     `;
     list.appendChild(el);
-  });
+  }
+  
+  console.log('Envelopes rendered:', filtered.length);
 }
 
-function openEnvelope(id) {
-  const msgs = getMessages();
+async function openEnvelope(id) {
+  const msgs = await getMessages();
   const msg = msgs.find(m=>m.id===id);
   if (!msg) return;
-  if (!msg.read) {
+  if (!msg.read && msg.fromRole === 'shadow') {
     msg.read = true;
-    const config = getData('scw_config', {});
-    config.timerStart = Date.now();
-    setData('scw_config', config);
-    saveMessages(msgs);
+    const msgRef = doc(window.db, 'messages', msg.id.toString());
+    await updateDoc(msgRef, { read: true });
+    if (window.currentUserId) {
+      await updateDoc(doc(window.db, 'users', window.currentUserId), { timerStart: Date.now() });
+    }
     updateTopBar();
     spawnHeart(document.getElementById('env-body-'+id) || document.body);
   }
@@ -2084,33 +2851,39 @@ function openEnvelope(id) {
   if (body) body.classList.toggle('open');
 }
 
-function revealInk(id) {
-  const msgs = getMessages();
+async function revealInk(id) {
+  const msgs = await getMessages();
   const msg = msgs.find(m=>m.id===id);
-  if (msg) { msg.revealed = true; saveMessages(msgs); }
+  if (msg && !msg.revealed) {
+    msg.revealed = true;
+    const msgRef = doc(window.db, 'messages', msg.id.toString());
+    await updateDoc(msgRef, { revealed: true });
+  }
   const el = document.getElementById('msg-text-'+id);
   if (el) { el.classList.remove('invisible-ink'); el.classList.add('revealed'); el.onclick = null; }
 }
 
-function likeMsg(id, e) {
+async function likeMsg(id, e) {
   e.stopPropagation();
-  const msgs = getMessages();
+  const msgs = await getMessages();
   const msg = msgs.find(m=>m.id===id);
   if (!msg) return;
   msg.liked = !msg.liked;
-  saveMessages(msgs);
+  const msgRef = doc(window.db, 'messages', msg.id.toString());
+  await updateDoc(msgRef, { liked: msg.liked });
   renderEnvelopes();
   updateTopBar();
   if (msg.liked) { spawnHeart(e.target); toast('❤️ Уголёк зажжён!'); }
 }
 
-function rewardMsg(id, e) {
+async function rewardMsg(id, e) {
   e.stopPropagation();
-  const msgs = getMessages();
+  const msgs = await getMessages();
   const msg = msgs.find(m=>m.id===id);
   if (!msg || msg.rewarded) return;
   msg.rewarded = true;
-  saveMessages(msgs);
+  const msgRef = doc(window.db, 'messages', msg.id.toString());
+  await updateDoc(msgRef, { rewarded: true });
   renderEnvelopes();
   launchConfetti();
   toast('🎁 Награда отправлена! 🎉');
@@ -2122,70 +2895,88 @@ function openReply(id) {
   openModal('reply-modal');
 }
 
-function sendReply() {
+async function sendReply() {
   const id = parseInt(document.getElementById('reply-msg-id').value);
   const text = document.getElementById('reply-text').value.trim();
   if (!text) { toast('Напиши ответ! 💕'); return; }
-  const msgs = getMessages();
+  const msgs = await getMessages();
   const msg = msgs.find(m=>m.id===id);
-  if (msg) { msg.reply = text; saveMessages(msgs); }
+  if (msg) {
+    msg.reply = text;
+    const msgRef = doc(window.db, 'messages', msg.id.toString());
+    await updateDoc(msgRef, { reply: text });
+  }
   closeModal('reply-modal');
   renderEnvelopes();
   renderSentList();
   toast('💌 Ответ отправлен!');
 }
 
-function renderWishes() {
-  const wishes = getWishes();
+async function renderWishes() {
+  const wishes = await getWishes();
   const list = document.getElementById('wishes-list');
   if (!list) return;
   if (wishes.length === 0) { list.innerHTML = '<p style="color:var(--text-light);font-size:0.9rem;text-align:center;padding:10px 0">Добавь первое желание! 🌟</p>'; return; }
   list.innerHTML = wishes.map((w,i) => `
     <div class="wish-item">
-      <div class="wish-check ${w.done?'done':''}" onclick="toggleWish(${i})">${w.done?'✓':''}</div>
+      <div class="wish-check ${w.done?'done':''}" onclick="toggleWish('${w.id}')">${w.done?'✓':''}</div>
       <div class="wish-text ${w.done?'done-text':''}">${w.text}</div>
-      <button onclick="removeWish(${i})" style="background:none;border:none;cursor:pointer;color:var(--text-light);font-size:0.9rem;padding:4px">✕</button>
+      <button onclick="removeWish('${w.id}')" style="background:none;border:none;cursor:pointer;color:var(--text-light);font-size:0.9rem;padding:4px">✕</button>
     </div>
   `).join('');
 }
 
-function addWish() {
+async function addWish() {
   const input = document.getElementById('new-wish-input');
   const text = input.value.trim();
   if (!text) return;
-  const wishes = getWishes();
-  wishes.push({ text, done: false });
-  saveWishes(wishes);
+  const newWish = {
+    id: Date.now().toString(),
+    text,
+    done: false,
+    createdBy: 'receiver',
+    ts: Date.now(),
+    pairId: window.pairId
+  };
+  const wishRef = doc(window.db, 'wishes', newWish.id);
+  await setDoc(wishRef, newWish);
   input.value = '';
   renderWishes();
   toast('✨ Желание добавлено!');
 }
 
-function toggleWish(i) {
-  const wishes = getWishes();
-  wishes[i].done = !wishes[i].done;
-  saveWishes(wishes);
-  renderWishes();
-  if (wishes[i].done) { launchConfetti(); toast('🎉 Желание выполнено!'); }
+async function toggleWish(id) {
+  const wishRef = doc(window.db, 'wishes', id);
+  const wishDoc = await getDoc(wishRef);
+  if (wishDoc.exists()) {
+    const newDone = !wishDoc.data().done;
+    await updateDoc(wishRef, { done: newDone });
+    renderWishes();
+    if (newDone) { launchConfetti(); toast('🎉 Желание выполнено!'); }
+  }
 }
 
-function removeWish(i) {
-  const wishes = getWishes();
-  wishes.splice(i,1);
-  saveWishes(wishes);
+async function removeWish(id) {
+  await deleteDoc(doc(window.db, 'wishes', id));
   renderWishes();
 }
 
-function renderHerCorner() {
-  const config = getData('scw_config', {});
-  document.getElementById('her-mood-display').textContent = config.mood || '❓';
-  const wishes = getWishes();
+async function renderHerCorner() {
+  const config = window.userDataCache || {};
+  const partnerId = config.partnerId;
+  let partnerMood = '❓';
+  if (partnerId) {
+    const partnerDoc = await getDoc(doc(window.db, 'users', partnerId));
+    if (partnerDoc.exists()) partnerMood = partnerDoc.data().mood || '❓';
+  }
+  document.getElementById('her-mood-display').textContent = partnerMood;
+  const wishes = await getWishes();
   const list = document.getElementById('her-wishes-list');
   if (!list) return;
   if (wishes.length === 0) { list.innerHTML = '<div class="empty-state" style="padding:20px 0"><div class="es-icon" style="font-size:2rem">🏦</div><p>Он пока не добавил желания</p></div>'; return; }
-  list.innerHTML = wishes.map((w,i) => `
+  list.innerHTML = wishes.map((w) => `
     <div class="wish-item">
-      <div class="wish-check ${w.done?'done':''}" onclick="shadowToggleWish(${i})">${w.done?'✓':''}</div>
+      <div class="wish-check ${w.done?'done':''}" onclick="shadowToggleWish('${w.id}')">${w.done?'✓':''}</div>
       <div class="wish-text ${w.done?'done-text':''}">${w.text}</div>
     </div>
   `).join('');
@@ -2193,23 +2984,27 @@ function renderHerCorner() {
   if (td) td.textContent = calcTimer(config.timerStart || Date.now());
 }
 
-function shadowToggleWish(i) {
-  const wishes = getWishes();
-  wishes[i].done = !wishes[i].done;
-  saveWishes(wishes);
-  renderHerCorner();
-  if (wishes[i].done) { launchConfetti(); toast('🎉 Исполнено! Он увидит!'); }
+async function shadowToggleWish(id) {
+  const wishRef = doc(window.db, 'wishes', id);
+  const wishDoc = await getDoc(wishRef);
+  if (wishDoc.exists()) {
+    const newDone = !wishDoc.data().done;
+    await updateDoc(wishRef, { done: newDone });
+    renderHerCorner();
+    if (newDone) { launchConfetti(); toast('🎉 Исполнено! Он увидит!'); }
+  }
 }
 
-function renderStats() {
-  const msgs = getMessages().filter(m=>!m.scheduled||m.scheduled<=Date.now());
-  document.getElementById('stat-total').textContent = msgs.length;
-  document.getElementById('stat-likes').textContent = msgs.filter(m=>m.liked).length;
-  document.getElementById('stat-rewards').textContent = msgs.filter(m=>m.rewarded).length;
-  document.getElementById('stat-replies').textContent = msgs.filter(m=>m.reply).length;
-  renderWeekChart(msgs);
-  renderWordCloud(msgs);
-  renderCalendar(msgs);
+async function renderStats() {
+  const msgs = await getMessages();
+  const filtered = msgs.filter(m=>!m.scheduled||m.scheduled<=Date.now());
+  document.getElementById('stat-total').textContent = filtered.length;
+  document.getElementById('stat-likes').textContent = filtered.filter(m=>m.liked).length;
+  document.getElementById('stat-rewards').textContent = filtered.filter(m=>m.rewarded).length;
+  document.getElementById('stat-replies').textContent = filtered.filter(m=>m.reply).length;
+  renderWeekChart(filtered);
+  renderWordCloud(filtered);
+  renderCalendar(filtered);
 }
 
 function renderWeekChart(msgs) {
@@ -2235,10 +3030,12 @@ function renderWordCloud(msgs) {
   if (!cloud) return;
   const freq = {};
   msgs.forEach(m => {
-    m.text.toLowerCase().split(/\s+/).forEach(w => {
-      w = w.replace(/[^а-яёa-z]/gi,'');
-      if (w.length > 3) freq[w] = (freq[w]||0)+1;
-    });
+    if (m.text) {
+      m.text.toLowerCase().split(/\s+/).forEach(w => {
+        w = w.replace(/[^а-яёa-z]/gi,'');
+        if (w.length > 3) freq[w] = (freq[w]||0)+1;
+      });
+    }
   });
   const sorted = Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,20);
   if (sorted.length === 0) { cloud.innerHTML = '<p style="color:var(--text-light);font-size:0.9rem">Слов пока нет 🌱</p>'; return; }
@@ -2250,7 +3047,7 @@ function renderWordCloud(msgs) {
   }).join('');
 }
 
-function renderCalendar(msgs) {
+async function renderCalendar(msgs) {
   const grid = document.getElementById('cal-grid');
   if (!grid) return;
   const activeDates = new Set(msgs.filter(m=>m.read).map(m=>new Date(m.ts).toDateString()));
@@ -2266,14 +3063,13 @@ function renderCalendar(msgs) {
     grid.appendChild(el);
   }
   const sgrid = document.getElementById('shadow-cal-grid');
-  if (!sgrid) return;
-  sgrid.innerHTML = grid.innerHTML;
+  if (sgrid) sgrid.innerHTML = grid.innerHTML;
 }
 
 function renderTimer() {
-  const config = getData('scw_config', {});
+  const config = window.userDataCache || {};
   const el = document.getElementById('timer-display');
-  if (el) el.textContent = calcTimer(config.timerStart||Date.now());
+  if (el) el.textContent = calcTimer(config.timerStart || Date.now());
 }
 
 function calcTimer(start) {
@@ -2284,18 +3080,16 @@ function calcTimer(start) {
   return h + ' ч ' + m + ' мин';
 }
 
-function resetTimer() {
-  const config = getData('scw_config', {});
-  config.timerStart = Date.now();
-  setData('scw_config', config);
+async function resetTimer() {
+  if (window.currentUserId) {
+    await updateDoc(doc(window.db, 'users', window.currentUserId), { timerStart: Date.now() });
+  }
   renderTimer();
   toast('⏱️ Таймер сброшен!');
 }
 
-setInterval(renderTimer, 60000);
-
 function renderProfile() {
-  const config = getData('scw_config', {});
+  const config = window.userDataCache || {};
   const opts = document.getElementById('avatar-options');
   if (!opts) return;
   opts.innerHTML = AVATARS.map(a => `
@@ -2303,44 +3097,46 @@ function renderProfile() {
   `).join('');
 }
 
-function setAvatar(a) {
-  const config = getData('scw_config', {});
-  config.avatar = a;
-  setData('scw_config', config);
+async function setAvatar(a) {
+  if (window.currentUserId) {
+    await updateDoc(doc(window.db, 'users', window.currentUserId), { avatar: a });
+    if (window.userDataCache) window.userDataCache.avatar = a;
+  }
   renderProfile();
   updateTopBar();
   toast('Аватар обновлён! ' + a);
 }
 
-function renderStickersMystic() {
+async function renderStickersMystic() {
   const grid = document.getElementById('sticker-grid-mystic');
   if (!grid) return;
   grid.innerHTML = STICKERS.map(s => `<div class="sticker-item" onclick="sendSticker('mystic','${s}')">${s}</div>`).join('');
-  renderStickerChat();
+  await renderStickerChat();
 }
 
-function renderStickersShadow() {
+async function renderStickersShadow() {
   const grid = document.getElementById('sticker-grid-shadow');
   if (!grid) return;
   grid.innerHTML = STICKERS.map(s => `<div class="sticker-item" onclick="sendSticker('shadow','${s}')">${s}</div>`).join('');
 }
 
-function sendSticker(from, sticker) {
-  const stickers = getStickers();
-  stickers.push({ from, sticker, ts: Date.now() });
-  saveStickers(stickers);
-  renderStickerChat();
+async function sendSticker(from, sticker) {
+  const stickerObj = { from: from === 'mystic' ? 'receiver' : 'sender', sticker, ts: Date.now(), pairId: window.pairId };
+  const stickerRef = doc(window.db, 'stickers', Date.now().toString() + Math.random());
+  await setDoc(stickerRef, stickerObj);
+  await renderStickerChat();
   toast(from==='shadow'?`${sticker} брошен ему!`:`${sticker} брошен в ответ!`);
   spawnHeart(document.body);
 }
 
-function renderStickerChat() {
+async function renderStickerChat() {
   const chat = document.getElementById('sticker-chat');
   if (!chat) return;
-  const stickers = getStickers().slice(-20);
-  if (stickers.length===0) { chat.innerHTML='<p style="text-align:center;color:var(--text-light);font-size:0.9rem;padding:20px 0">Бросайте стикеры друг другу! 🎭</p>'; return; }
-  chat.innerHTML = stickers.map(s => `
-    <div style="display:flex;align-items:center;gap:8px;${s.from==='shadow'?'flex-direction:row-reverse':''}">
+  const stickers = await getStickers();
+  const recent = stickers.slice(-20);
+  if (recent.length===0) { chat.innerHTML='<p style="text-align:center;color:var(--text-light);font-size:0.9rem;padding:20px 0">Бросайте стикеры друг другу! 🎭</p>'; return; }
+  chat.innerHTML = recent.map(s => `
+    <div style="display:flex;align-items:center;gap:8px;${s.from==='sender'?'flex-direction:row-reverse':''}">
       <div style="font-size:2.5rem;animation:popIn 0.3s ease">${s.sticker}</div>
       <div style="font-size:0.72rem;color:var(--text-light)">${formatTime(s.ts)}</div>
     </div>
@@ -2348,9 +3144,9 @@ function renderStickerChat() {
   chat.scrollTop = chat.scrollHeight;
 }
 
-function renderLevel() {
-  const msgs = getMessages().filter(m=>!m.isSticker);
-  const count = msgs.length;
+async function renderLevel() {
+  const msgs = await getMessages();
+  const count = msgs.filter(m => m.fromRole === 'shadow').length;
   let level = LEVELS[0];
   let nextLevel = LEVELS[1];
   for (let i=LEVELS.length-1;i>=0;i--) {
@@ -2371,15 +3167,17 @@ function renderLevel() {
     levelSub.textContent = 'Максимальный уровень достигнут! 🏆';
     levelBar.style.width = '100%';
   }
-  renderCalendar(msgs);
+  const allMsgs = await getMessages();
+  renderCalendar(allMsgs);
 }
 
-function renderSentList() {
-  const msgs = getMessages().filter(m=>!m.isSticker);
+async function renderSentList() {
+  const msgs = await getMessages();
+  const filtered = msgs.filter(m => !m.isSticker && m.fromRole === 'shadow');
   const list = document.getElementById('sent-list');
   if (!list) return;
-  if (msgs.length===0) { list.innerHTML='<div class="empty-state"><div class="es-icon">📭</div><p>Ты ещё ничего не отправила...</p></div>'; return; }
-  list.innerHTML = msgs.map(msg => {
+  if (filtered.length===0) { list.innerHTML='<div class="empty-state"><div class="es-icon">📭</div><p>Ты ещё ничего не отправила...</p></div>'; return; }
+  list.innerHTML = filtered.map(msg => {
     const isScheduled = msg.scheduled && msg.scheduled > Date.now();
     const pills = [
       msg.read ? '<span class="status-pill read">👁 Прочитано</span>' : '<span class="status-pill unread">📩 Не прочитал</span>',
@@ -2402,24 +3200,23 @@ function renderSentList() {
   }).join('');
 }
 
-function selfDestruct(id) {
-  const msgs = getMessages().filter(m=>m.id!==id);
-  saveMessages(msgs);
+async function selfDestruct(id) {
+  await deleteDoc(doc(window.db, 'messages', id.toString()));
   renderSentList();
   updateTopBar();
   toast('💥 Сообщение уничтожено!');
 }
 
-function openSafe() {
-  const config = getData('scw_config', {});
+async function openSafe() {
+  const config = window.userDataCache || {};
   const pass = document.getElementById('safe-pass-input').value;
   if (!config.safePass) {
-    config.safePass = btoa(pass);
-    setData('scw_config', config);
+    await updateDoc(doc(window.db, 'users', window.currentUserId), { safePass: btoa(pass) });
     toast('🔒 Код сейфа установлен! Запомни его!');
   }
   if (btoa(pass) !== config.safePass) { toast('Неверный код сейфа! 🔒'); return; }
-  const safeMsgs = getMessages().filter(m=>m.isSafe && (!m.scheduled||m.scheduled<=Date.now()));
+  const msgs = await getMessages();
+  const safeMsgs = msgs.filter(m=>m.isSafe && (!m.scheduled||m.scheduled<=Date.now()));
   const safeView = document.getElementById('safe-open-view');
   const safeList = document.getElementById('safe-messages');
   safeList.innerHTML = safeMsgs.length ? safeMsgs.map(m=>`
@@ -2444,18 +3241,19 @@ function burnAll() {
   openModal('burn-modal');
 }
 
-function confirmBurn() {
-  const config = getData('scw_config', {});
+async function confirmBurn() {
+  const config = window.userDataCache || {};
   const pass = document.getElementById('burn-pass').value;
   if (btoa(pass) !== config.pass) { toast('Неверный пароль! 🙈'); return; }
-  saveMessages([]);
-  saveStickers([]);
-  saveSafeMessages([]);
+  const msgs = await getMessages();
+  for (const msg of msgs) {
+    await deleteDoc(doc(window.db, 'messages', msg.id.toString()));
+  }
+  toast('🔥 Все тайны сожжены...');
   closeModal('burn-modal');
   renderAll();
   updateTopBar();
   flameFx();
-  toast('🔥 Все тайны сожжены...');
 }
 
 function flameFx() {
@@ -2471,9 +3269,6 @@ function flameFx() {
 function toggleNight() {
   state.isNight = !state.isNight;
   applyNight();
-  const config = getData('scw_config', {});
-  config.nightManual = state.isNight;
-  setData('scw_config', config);
 }
 
 function applyNight() {
@@ -2482,12 +3277,9 @@ function applyNight() {
 }
 
 function startNightCheck() {
-  const config = getData('scw_config', {});
-  if (config.nightManual !== undefined) { state.isNight = config.nightManual; applyNight(); return; }
   const h = new Date().getHours();
   if (h >= 22 || h < 6) { state.isNight = true; applyNight(); }
   setInterval(()=>{
-    if (config.nightManual !== undefined) return;
     const h2 = new Date().getHours();
     const shouldNight = h2 >= 22 || h2 < 6;
     if (shouldNight !== state.isNight) { state.isNight = shouldNight; applyNight(); }
@@ -2652,49 +3444,85 @@ function formatTime(ts) {
   return d.toLocaleDateString('ru',{day:'numeric',month:'short'})+' в '+d.toLocaleTimeString('ru',{hour:'2-digit',minute:'2-digit'});
 }
 
-setInterval(()=>{
-  const msgs = getMessages();
-  let changed=false;
-  msgs.forEach(m=>{ if(m.scheduled && m.scheduled<=Date.now() && !m.delivered) { m.delivered=true; changed=true; } });
-  if(changed){saveMessages(msgs);if(state.user==='mystic'){renderEnvelopes();updateTopBar();}}
-},30000);
-
 function checkUrlRole() {
   const params=new URLSearchParams(window.location.search);
   if(params.get('role')==='shadow'){state.loginMode='shadow';showLogin();document.getElementById('toggle-receiver').classList.remove('active');document.getElementById('toggle-sender').classList.add('active');}
 }
 
 document.addEventListener('DOMContentLoaded', ()=>{
-  const config = getData('scw_config', null);
+  const config = localStorage.getItem('scw_config') ? JSON.parse(localStorage.getItem('scw_config')) : null;
   initBgCanvas();
   buildStars();
-  if (!checkSavedSession()) {
-    if (config) showLogin();
-  }
+  checkSavedSession().then(success => {
+    if (!success && config) showLogin();
+    else if (!success) showRegister();
+  });
   checkUrlRole();
-  setInterval(()=>{
-    if(state.user==='mystic'&&document.getElementById('tab-inbox').classList.contains('active')) renderEnvelopes();
-  },60000);
-  if(config&&config.mood){
-    document.querySelectorAll('.mood-emoji-btn').forEach(b=>{if(b.textContent===config.mood)b.classList.add('selected');});
-  }
 });
 
-function maybeAddSampleData() {
-  const msgs = getMessages();
-  if (msgs.length === 0 && getData('scw_config',null)) {
-    const samples = [
-    ];
-    saveMessages(samples);
-  }
+// Global references for onclick
+window.doRegister = doRegister;
+window.doLogin = doLogin;
+window.showLogin = showLogin;
+window.showRegister = showRegister;
+window.switchLoginMode = switchLoginMode;
+window.doLogout = doLogout;
+window.switchTab = switchTab;
+window.switchTabS = switchTabS;
+window.setMood = setMood;
+window.setSecretCode = setSecretCode;
+window.checkCode = checkCode;
+window.pickMsgMood = pickMsgMood;
+window.toggleInvisible = toggleInvisible;
+window.toggleSafe = toggleSafe;
+window.toggleSchedule = toggleSchedule;
+window.updateCharCount = updateCharCount;
+window.sendMessage = sendMessage;
+window.openEnvelope = openEnvelope;
+window.revealInk = revealInk;
+window.likeMsg = likeMsg;
+window.rewardMsg = rewardMsg;
+window.openReply = openReply;
+window.sendReply = sendReply;
+window.addWish = addWish;
+window.toggleWish = toggleWish;
+window.removeWish = removeWish;
+window.shadowToggleWish = shadowToggleWish;
+window.resetTimer = resetTimer;
+window.setAvatar = setAvatar;
+window.sendSticker = sendSticker;
+window.selfDestruct = selfDestruct;
+window.openSafe = openSafe;
+window.lockSafe = lockSafe;
+window.burnAll = burnAll;
+window.confirmBurn = confirmBurn;
+window.toggleNight = toggleNight;
+window.shareLink = shareLink;
+window.copyLink = copyLink;
+window.toggleMusic = toggleMusic;
+window.openProfile = openProfile;
+window.activateNav = activateNav;
+window.closeModal = closeModal;
+function debugState() {
+  console.log('=== DEBUG INFO ===');
+  console.log('state.user:', state.user);
+  console.log('window.currentUserId:', window.currentUserId);
+  console.log('window.currentUserRole:', window.currentUserRole);
+  console.log('window.pairId:', window.pairId);
+  console.log('window.userDataCache:', window.userDataCache);
+  console.log('Firebase auth currentUser:', window.auth.currentUser);
+  console.log('mystic-view display:', document.getElementById('mystic-view').style.display);
+  console.log('shadow-view display:', document.getElementById('shadow-view').style.display);
+  console.log('app display:', document.getElementById('app').style.display);
+  console.log('auth-screens display:', document.getElementById('auth-screens').style.display);
+  console.log('================');
 }
 
-const _origLoginAs = loginAs;
+// Вызываем debugState в loginAs
+const originalLoginAs = loginAs;
 window.loginAs = function(role) {
-  _origLoginAs(role);
-  maybeAddSampleData();
-  renderEnvelopes();
-  updateTopBar();
+  originalLoginAs(role);
+  setTimeout(debugState, 500);
 };
 </script>
 </body>

@@ -2159,6 +2159,10 @@ async function doRegisterBoth() {
     registerBtn.textContent = originalText;
     registerBtn.disabled = false;
   }
+  window.doRegister = function() {
+  console.log('doRegister called');
+  toast('Используйте "Создать наш мир" вместо обычной регистрации');
+};
 }
 
 async function doLogin() {
@@ -2780,29 +2784,29 @@ async function renderEnvelopes() {
   console.log('renderEnvelopes called');
   
   const list = document.getElementById('envelopes-list');
-  if (!list) {
-    console.error('envelopes-list element not found');
-    return;
-  }
+  if (!list) return;
   
   const msgs = await getMessages();
-  console.log('Total messages:', msgs.length);
+  console.log('All messages:', msgs);
   
-  // Для получателя показываем только сообщения от отправительницы
-  const filtered = msgs.filter(m => 
-    (!m.scheduled || m.scheduled <= Date.now()) && 
-    !m.isSafe && 
-    m.fromRole === 'shadow'
-  );
+  // Для получателя показываем ВСЕ сообщения от отправительницы
+  const filtered = msgs.filter(m => {
+    // Проверяем все условия
+    const isFromShadow = m.fromRole === 'shadow';
+    const notScheduled = !m.scheduled || m.scheduled <= Date.now();
+    const notSafe = !m.isSafe;
+    
+    console.log('Message check:', { id: m.id, isFromShadow, notScheduled, notSafe });
+    return isFromShadow && notScheduled && notSafe;
+  });
   
-  console.log('Filtered messages for display:', filtered.length);
+  console.log('Filtered messages:', filtered.length);
   
   const empty = document.getElementById('empty-envelopes');
   
   if (filtered.length === 0) { 
     list.innerHTML = ''; 
     if (empty) list.appendChild(empty);
-    console.log('No messages to display');
     return; 
   }
   

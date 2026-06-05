@@ -1903,11 +1903,16 @@ async function getMessages() {
   }
   
   try {
-    // Новый путь - подколлекция внутри документа пары
-    const messagesRef = collection(window.db, 'relationships', window.pairId, 'messages');
-    const q = query(messagesRef, orderBy('ts', 'desc'));
-    const snap = await getDocs(q);
+    // Убираем orderBy - временное решение
+    const q = window.query(
+      window.collection(window.db, 'messages'),
+      window.where('pairId', '==', window.pairId)
+      // window.orderBy('ts', 'desc') - УБИРАЕМ ЭТУ СТРОКУ
+    );
+    const snap = await window.getDocs(q);
     const messages = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    // Сортируем вручную на клиенте
+    messages.sort((a, b) => (b.ts || 0) - (a.ts || 0));
     console.log(`getMessages: loaded ${messages.length} messages`);
     return messages;
   } catch(e) { 
@@ -2434,19 +2439,18 @@ function forceShowActiveTab() {
   }
 }
 function startRealtimeListener() {
-  if (!window.pairId || !window.db) return;
+  if (!window.pairId) return;
   
-  console.log('Starting realtime listener for pair:', window.pairId);
-  
-  // Слушаем изменения сообщений
-  const messagesQuery = window.query(
+  // Убираем orderBy из запроса
+  const q = window.query(
     window.collection(window.db, 'messages'),
-    window.where('pairId', '==', window.pairId),
-    window.orderBy('ts', 'desc')
+    window.where('pairId', '==', window.pairId)
   );
   
-  const unsubscribe = window.onSnapshot(messagesQuery, (snapshot) => {
-    console.log('Messages updated, count:', snapshot.docs.length);
+  window.onSnapshot(q, (snapshot) => {
+    let messages = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    messages.sort((a, b) => (b.ts || 0) - (a.ts || 0)); // Сортируем вручную
+    
     if (state.user === 'mystic') {
       renderEnvelopes();
     }
@@ -2454,12 +2458,7 @@ function startRealtimeListener() {
       renderSentList();
     }
     updateTopBar();
-  }, (error) => {
-    console.warn('Realtime error:', error);
   });
-  
-  // Сохраняем функцию отписки, если нужно
-  window.unsubscribeMessages = unsubscribe;
 }
 function startRealtimeListener() {
   if (!window.pairId) return;

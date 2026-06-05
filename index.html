@@ -3520,6 +3520,54 @@ window.toggleMusic = toggleMusic;
 window.openProfile = openProfile;
 window.activateNav = activateNav;
 window.closeModal = closeModal;
+// Фикс отсутствующих функций
+window.doRegister = function() {
+  console.log('Регистрация через doRegister');
+  toast('Пожалуйста, используйте форму "Создать наш мир (2 аккаунта)" выше ⬆️');
+};
+
+window.doRegisterBoth = window.doRegisterBoth || function() {
+  console.log('doRegisterBoth called');
+  const receiverName = document.getElementById('reg-myname')?.value.trim();
+  const receiverEmail = document.getElementById('reg-receiver-email')?.value.trim();
+  const receiverPass = document.getElementById('reg-receiver-pass')?.value;
+  const senderName = document.getElementById('reg-sendername')?.value.trim();
+  const senderEmail = document.getElementById('reg-sender-email')?.value.trim();
+  const senderPass = document.getElementById('reg-sender-pass')?.value;
+  const pairPass = document.getElementById('reg-pass')?.value;
+  const pairPass2 = document.getElementById('reg-pass2')?.value;
+  
+  if (!receiverName || !senderName) {
+    toast('Введите имена для обоих');
+    return;
+  }
+  if (!receiverEmail || !senderEmail) {
+    toast('Введите email для обоих');
+    return;
+  }
+  if (!receiverPass || !senderPass) {
+    toast('Введите пароли для обоих аккаунтов');
+    return;
+  }
+  if (receiverPass.length < 8) {
+    toast('Пароль получателя минимум 8 символов');
+    return;
+  }
+  if (senderPass.length < 8) {
+    toast('Пароль отправительницы минимум 8 символов');
+    return;
+  }
+  if (!pairPass || pairPass.length < 8) {
+    toast('Общий пароль пары минимум 8 символов');
+    return;
+  }
+  if (pairPass !== pairPass2) {
+    toast('Общие пароли не совпадают');
+    return;
+  }
+  
+  toast('Пожалуйста, заполните форму выше для регистрации двух аккаунтов');
+};
 function debugState() {
   console.log('=== DEBUG INFO ===');
   console.log('state.user:', state.user);

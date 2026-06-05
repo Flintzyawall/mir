@@ -1903,12 +1903,10 @@ async function getMessages() {
   }
   
   try {
-    const q = window.query(
-      window.collection(window.db, 'messages'),
-      window.where('pairId', '==', window.pairId),
-      window.orderBy('ts', 'desc')
-    );
-    const snap = await window.getDocs(q);
+    // Новый путь - подколлекция внутри документа пары
+    const messagesRef = collection(window.db, 'relationships', window.pairId, 'messages');
+    const q = query(messagesRef, orderBy('ts', 'desc'));
+    const snap = await getDocs(q);
     const messages = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     console.log(`getMessages: loaded ${messages.length} messages`);
     return messages;
@@ -1917,13 +1915,12 @@ async function getMessages() {
     return []; 
   }
 }
-
 async function saveMessages(msgs) {
   if (!window.pairId) return;
   try {
     const batch = writeBatch(window.db);
     for (const msg of msgs) {
-      const msgRef = doc(window.db, 'messages', msg.id.toString());
+      const msgRef = doc(window.db, 'relationships', window.pairId, 'messages', msg.id.toString());
       batch.set(msgRef, { ...msg, pairId: window.pairId }, { merge: true });
     }
     await batch.commit();
@@ -2466,12 +2463,29 @@ function startRealtimeListener() {
 }
 function startRealtimeListener() {
   if (!window.pairId) return;
-  const q = query(collection(window.db, 'messages'), where('pairId', '==', window.pairId), orderBy('ts', 'desc'));
-  onSnapshot(q, () => {
-    if (state.user === 'mystic') renderEnvelopes();
-    if (state.user === 'shadow') renderSentList();
-    updateTopBar();
-  });
+  
+  try {
+    // Слушаем подколлекцию сообщений пары
+    const messagesRef = collection(window.db, 'relationships', window.pairId, 'messages');
+    const q = query(messagesRef, orderBy('ts', 'desc'));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      console.log('Messages updated, count:', snapshot.docs.length);
+      if (state.user === 'mystic') {
+        renderEnvelopes();
+      }
+      if (state.user === 'shadow') {
+        renderSentList();
+      }
+      updateTopBar();
+    }, (error) => {
+      console.warn('Realtime error:', error);
+    });
+    
+    window.unsubscribeMessages = unsubscribe;
+  } catch(e) {
+    console.error('Start listener error:', e);
+  }
 }
 
 let realtimeUnsub = null;
@@ -2724,8 +2738,8 @@ async function sendMessage() {
     pairId: window.pairId
   };
   
-  const msgRef = doc(window.db, 'messages', msg.id.toString());
-  await setDoc(msgRef, msg);
+const msgRef = doc(window.db, 'relationships', window.pairId, 'messages', msg.id.toString());
+await setDoc(msgRef, msg);
   
   if (!scheduledTime && window.currentUserId) {
     await updateDoc(doc(window.db, 'users', window.currentUserId), { timerStart: Date.now() });
@@ -2839,7 +2853,7 @@ async function openEnvelope(id) {
   if (!msg) return;
   if (!msg.read && msg.fromRole === 'shadow') {
     msg.read = true;
-    const msgRef = doc(window.db, 'messages', msg.id.toString());
+    const msgRef = doc(window.db, 'relationships', window.pairId, 'messages', msg.id.toString());
     await updateDoc(msgRef, { read: true });
     if (window.currentUserId) {
       await updateDoc(doc(window.db, 'users', window.currentUserId), { timerStart: Date.now() });
@@ -2856,7 +2870,7 @@ async function revealInk(id) {
   const msg = msgs.find(m=>m.id===id);
   if (msg && !msg.revealed) {
     msg.revealed = true;
-    const msgRef = doc(window.db, 'messages', msg.id.toString());
+    const msgRef = doc(window.db, 'relationships', window.pairId, 'messages', msg.id.toString());
     await updateDoc(msgRef, { revealed: true });
   }
   const el = document.getElementById('msg-text-'+id);
@@ -2869,7 +2883,7 @@ async function likeMsg(id, e) {
   const msg = msgs.find(m=>m.id===id);
   if (!msg) return;
   msg.liked = !msg.liked;
-  const msgRef = doc(window.db, 'messages', msg.id.toString());
+  const msgRef = doc(window.db, 'relationships', window.pairId, 'messages', msg.id.toString());
   await updateDoc(msgRef, { liked: msg.liked });
   renderEnvelopes();
   updateTopBar();
@@ -2882,7 +2896,7 @@ async function rewardMsg(id, e) {
   const msg = msgs.find(m=>m.id===id);
   if (!msg || msg.rewarded) return;
   msg.rewarded = true;
-  const msgRef = doc(window.db, 'messages', msg.id.toString());
+  const msgRef = doc(window.db, 'relationships', window.pairId, 'messages', msg.id.toString());
   await updateDoc(msgRef, { rewarded: true });
   renderEnvelopes();
   launchConfetti();
@@ -2903,7 +2917,7 @@ async function sendReply() {
   const msg = msgs.find(m=>m.id===id);
   if (msg) {
     msg.reply = text;
-    const msgRef = doc(window.db, 'messages', msg.id.toString());
+    const msgRef = doc(window.db, 'relationships', window.pairId, 'messages', msg.id.toString());
     await updateDoc(msgRef, { reply: text });
   }
   closeModal('reply-modal');
